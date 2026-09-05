@@ -1,3 +1,5 @@
+// NOTE!!! This code has been tested on an esp32 c3 supermini, check pin config if using another board!
+
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <Wire.h>
