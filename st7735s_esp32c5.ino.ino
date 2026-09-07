@@ -13,7 +13,7 @@
 #define TFT_SCLK   7     // SPI SCK (Klocka)
 #define TFT_MOSI   8     // SPI MOSI (Data)
 #define TFT_DC     12    // Data / Command
-#define TFT_CS    -1     // Hårdvarubunden till GND
+#define TFT_CS     11     // Chip select
 #define TFT_RST   -1     // Hårdvarubunden till 3.3V
 
 // Subklass för att sätta hårdvaruoffseten direkt
