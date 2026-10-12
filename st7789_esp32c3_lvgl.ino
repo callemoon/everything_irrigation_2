@@ -1,4 +1,3 @@
-
 #include <Arduino.h>
 #include <SPI.h>
 #include <WiFi.h>
@@ -10,14 +9,13 @@
 
 // =====================================================
 // WIFI
+// Fyll i dina uppgifter lokalt
 // =====================================================
 const char* WIFI_SSID = "";
 const char* WIFI_PASS = "";
 
 // =====================================================
 // THINGSPEAK-KANALER
-// Rubriker, kanal-ID, fält, API-nyckel och enhet
-// ändras här. UI:t använder automatiskt namnen.
 // =====================================================
 struct ChannelConfig {
   const char *name;
@@ -40,7 +38,6 @@ constexpr int NUM_CHANNELS =
 
 // =====================================================
 // ESP32-C3 / ST7789
-// Samma pinnar som i din fungerande kod
 // =====================================================
 #define TFT_SCLK 0
 #define TFT_MOSI 1
@@ -49,29 +46,31 @@ constexpr int NUM_CHANNELS =
 #define TFT_CS   4
 #define PIN_LED  5
 
-// Widescreen efter rotation
 constexpr int SCREEN_W = 320;
 constexpr int SCREEN_H = 170;
 
-#define COLOR_BG       0x0821
-#define COLOR_PANEL    0x18C5
-#define COLOR_BORDER   0x3218
-#define COLOR_CYAN     0x07FF
-#define COLOR_ORANGE   0xFCE0
-#define COLOR_GREEN    0x07E0
+// =====================================================
+// FÄRGER – MÖRK, REN DASHBOARD
+// =====================================================
+#define COLOR_BG       0x0861  // Mörk marinblå
+#define COLOR_PANEL    0x10A3  // Mjukt blå panel
+#define COLOR_BORDER   0x2945  // Diskret blå kant
+#define COLOR_CYAN     0x5DFF  // Ljus cyan
+#define COLOR_ORANGE   0xFD20  // Varm orange
+#define COLOR_GREEN    0x5F6D  // Mjuk grön
 #define COLOR_RED      0xF800
 #define COLOR_WHITE    0xFFFF
-#define COLOR_GRAY     0x7BEF
+#define COLOR_GRAY     0xBDF7  // Ljus grå text
 
 SPIClass spiDisplay(FSPI);
+
 Adafruit_ST7789 tft(
   &spiDisplay, TFT_CS, TFT_DC, TFT_RST
 );
 
-// LVGL partial buffer: 40 rader RGB565
+// Samma LVGL-buffert som tidigare
 static uint16_t drawBuffer[SCREEN_W * 40];
 
-// LVGL-objekt för värden och rubriker
 static lv_obj_t *valueLabels[NUM_CHANNELS];
 static lv_obj_t *titleLabels[NUM_CHANNELS];
 static lv_obj_t *statusLabel;
@@ -94,7 +93,6 @@ static void displayFlush(
   uint32_t width = area->x2 - area->x1 + 1;
   uint32_t height = area->y2 - area->y1 + 1;
 
-  // LVGL RGB565 till Adafruit ST7789
   tft.drawRGBBitmap(
     area->x1,
     area->y1,
@@ -107,20 +105,28 @@ static void displayFlush(
 }
 
 // =====================================================
-// GEMENSAM STIL
+// GEMENSAM KORTSTIL
 // =====================================================
 static void stylePanel(lv_obj_t *obj) {
   lv_obj_set_style_bg_color(
     obj, lv_color_hex(COLOR_PANEL), 0
   );
-  lv_obj_set_style_bg_opa(obj, LV_OPA_COVER, 0);
+
+  lv_obj_set_style_bg_opa(
+    obj, LV_OPA_COVER, 0
+  );
+
   lv_obj_set_style_border_color(
     obj, lv_color_hex(COLOR_BORDER), 0
   );
+
   lv_obj_set_style_border_width(obj, 1, 0);
   lv_obj_set_style_radius(obj, 9, 0);
   lv_obj_set_style_pad_all(obj, 7, 0);
-  lv_obj_clear_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
+
+  lv_obj_clear_flag(
+    obj, LV_OBJ_FLAG_SCROLLABLE
+  );
 }
 
 static lv_obj_t *makeLabel(
@@ -130,11 +136,15 @@ static lv_obj_t *makeLabel(
   const lv_font_t *font
 ) {
   lv_obj_t *label = lv_label_create(parent);
+
   lv_label_set_text(label, text);
+
   lv_obj_set_style_text_color(
     label, lv_color_hex(color), 0
   );
+
   lv_obj_set_style_text_font(label, font, 0);
+
   return label;
 }
 
@@ -147,97 +157,130 @@ static void createUI() {
   lv_obj_set_style_bg_color(
     screen, lv_color_hex(COLOR_BG), 0
   );
-  lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, 0);
-  lv_obj_clear_flag(screen, LV_OBJ_FLAG_SCROLLABLE);
 
-  // STOR PANEL TILL VÄNSTER
+  lv_obj_set_style_bg_opa(
+    screen, LV_OPA_COVER, 0
+  );
+
+  lv_obj_clear_flag(
+    screen, LV_OBJ_FLAG_SCROLLABLE
+  );
+
+  // STORT KORT TILL VÄNSTER
   lv_obj_t *mainCard = lv_obj_create(screen);
+
   lv_obj_set_pos(mainCard, 8, 8);
   lv_obj_set_size(mainCard, 184, 154);
+
   stylePanel(mainCard);
 
   lv_obj_set_style_border_color(
     mainCard, lv_color_hex(COLOR_CYAN), 0
   );
 
+  // Rubrik
   titleLabels[0] = makeLabel(
-    mainCard, channels[0].name,
-    COLOR_CYAN, &lv_font_montserrat_48
+    mainCard,
+    channels[0].name,
+    COLOR_CYAN,
+    &lv_font_montserrat_14
   );
+
   lv_obj_set_width(titleLabels[0], 164);
+
   lv_label_set_long_mode(
     titleLabels[0], LV_LABEL_LONG_DOT
   );
+
   lv_obj_align(
     titleLabels[0], LV_ALIGN_TOP_LEFT, 1, 2
   );
 
+  // Stort mätvärde
   valueLabels[0] = makeLabel(
-    mainCard, "--.-",
-    COLOR_WHITE, &lv_font_montserrat_14
+    mainCard,
+    "--.-",
+    COLOR_WHITE,
+    &lv_font_montserrat_14
   );
 
-  // En större font kan aktiveras i lv_conf.h
-  // och användas här, exempelvis montserrat_32.
   lv_obj_set_style_text_font(
-    valueLabels[0], &lv_font_montserrat_14, 0
+    valueLabels[0], &lv_font_montserrat_48, 0
   );
+
   lv_obj_align(
     valueLabels[0], LV_ALIGN_CENTER, 0, 3
   );
 
-  lv_obj_t *unitLabel = makeLabel(
-    mainCard, channels[0].unit,
-    COLOR_ORANGE, &lv_font_montserrat_14
-  );
-  lv_obj_align(
-    unitLabel, LV_ALIGN_BOTTOM_LEFT, 1, -1
-  );
+  // Enhetslabeln "C" är borttagen.
+  // Temperaturen visas fortfarande med enhet
+  // i värdet som hämtas från ThingSpeak.
 
-  // TRE SMÅ KORT TILL HÖGER
+  // TRE MINDRE KORT TILL HÖGER
   const int cardX = 201;
   const int cardW = 111;
   const int cardH = 48;
   const int cardY[] = {8, 61, 114};
 
   const uint32_t titleColors[] = {
-    COLOR_CYAN, COLOR_ORANGE, COLOR_GREEN
+    COLOR_CYAN,
+    COLOR_ORANGE,
+    COLOR_GREEN
   };
 
   for (int i = 1; i < NUM_CHANNELS; i++) {
     lv_obj_t *card = lv_obj_create(screen);
 
-    lv_obj_set_pos(card, cardX, cardY[i - 1]);
-    lv_obj_set_size(card, cardW, cardH);
-    stylePanel(card);
-
-    // Rubriken hämtas från channels[]
-    titleLabels[i] = makeLabel(
-      card, channels[i].name,
-      titleColors[i - 1], &lv_font_montserrat_14
+    lv_obj_set_pos(
+      card, cardX, cardY[i - 1]
     );
 
-    lv_obj_set_width(titleLabels[i], cardW - 20);
+    lv_obj_set_size(
+      card, cardW, cardH
+    );
+
+    stylePanel(card);
+
+    titleLabels[i] = makeLabel(
+      card,
+      channels[i].name,
+      titleColors[i - 1],
+      &lv_font_montserrat_14
+    );
+
+    lv_obj_set_width(
+      titleLabels[i], cardW - 20
+    );
+
     lv_label_set_long_mode(
       titleLabels[i], LV_LABEL_LONG_DOT
     );
+
     lv_obj_align(
       titleLabels[i], LV_ALIGN_TOP_LEFT, 0, -1
     );
 
     valueLabels[i] = makeLabel(
-      card, "--",
-      COLOR_WHITE, &lv_font_montserrat_14
+      card,
+      "--",
+      COLOR_WHITE,
+      &lv_font_montserrat_14
     );
+
     lv_obj_align(
       valueLabels[i], LV_ALIGN_BOTTOM_LEFT, 0, 0
     );
   }
 
+  // Diskret statusrad längst ned till vänster.
+  // Enhets-C:et är borttaget.
   statusLabel = makeLabel(
-    screen, "STARTING...",
-    COLOR_GRAY, &lv_font_montserrat_14
+    screen,
+    "STARTING...",
+    COLOR_GRAY,
+    &lv_font_montserrat_14
   );
+
   lv_obj_set_pos(statusLabel, 12, 145);
 }
 
@@ -259,11 +302,10 @@ static bool fetchChannel(int index) {
     "/last.txt?api_key=" + String(ch.apiKey);
 
   WiFiClientSecure client;
-
-  // För test. Använd certifikatverifiering i produktion.
   client.setInsecure();
 
   HTTPClient http;
+
   http.setConnectTimeout(5000);
   http.setTimeout(5000);
 
@@ -288,7 +330,10 @@ static bool fetchChannel(int index) {
     );
 
     char *endPtr = nullptr;
-    float value = strtof(payload.c_str(), &endPtr);
+
+    float value = strtof(
+      payload.c_str(), &endPtr
+    );
 
     if (payload.length() > 0 &&
         endPtr != payload.c_str() &&
@@ -298,14 +343,18 @@ static bool fetchChannel(int index) {
       char formatted[40];
 
       snprintf(
-        number, sizeof(number),
+        number,
+        sizeof(number),
         ch.decimals ? "%.1f" : "%.0f",
         value
       );
 
       snprintf(
-        formatted, sizeof(formatted),
-        "%s %s", number, ch.unit
+        formatted,
+        sizeof(formatted),
+        "%s %s",
+        number,
+        ch.unit
       );
 
       lv_label_set_text(
@@ -313,12 +362,16 @@ static bool fetchChannel(int index) {
       );
 
       Serial.printf(
-        "[OK] %s = %s\n", ch.name, formatted
+        "[OK] %s = %s\n",
+        ch.name,
+        formatted
       );
 
       success = true;
     } else {
-      Serial.println("[DATA] Ogiltigt numeriskt svar");
+      Serial.println(
+        "[DATA] Ogiltigt numeriskt svar"
+      );
     }
   } else if (code < 0) {
     Serial.printf(
@@ -341,14 +394,17 @@ void setup() {
   pinMode(PIN_LED, OUTPUT);
   digitalWrite(PIN_LED, HIGH);
 
-  // Samma initiering som i din fungerande skärmkod
+  // Samma skärminitiering som tidigare
   spiDisplay.begin(
     TFT_SCLK, -1, TFT_MOSI, TFT_CS
   );
 
   tft.init(170, 320);
   tft.setSPISpeed(40000000);
-  tft.setRotation(1);
+
+  // Rotation 180 grader från tidigare läge
+  tft.setRotation(3);
+
   tft.fillScreen(COLOR_BG);
 
   // LVGL 9
@@ -363,7 +419,9 @@ void setup() {
     display, LV_COLOR_FORMAT_RGB565
   );
 
-  lv_display_set_flush_cb(display, displayFlush);
+  lv_display_set_flush_cb(
+    display, displayFlush
+  );
 
   lv_display_set_buffers(
     display,
@@ -407,8 +465,13 @@ void setup() {
       lv_timer_handler();
     }
   } else {
-    Serial.println("[WiFi] Anslutning misslyckades");
-    lv_label_set_text(statusLabel, "WIFI FAILED");
+    Serial.println(
+      "[WiFi] Anslutning misslyckades"
+    );
+
+    lv_label_set_text(
+      statusLabel, "WIFI FAILED"
+    );
   }
 }
 
@@ -418,8 +481,7 @@ void setup() {
 void loop() {
   lv_timer_handler();
 
-  // En kanal var 5:e sekund:
-  // varje kanal uppdateras var 20:e sekund.
+  // En kanal var femte sekund
   static uint32_t lastFetch = 0;
   static int nextChannel = 0;
 
@@ -430,6 +492,7 @@ void loop() {
       lv_label_set_text(
         statusLabel, "WIFI RECONNECTING"
       );
+
       WiFi.reconnect();
     } else {
       bool ok = fetchChannel(nextChannel);
