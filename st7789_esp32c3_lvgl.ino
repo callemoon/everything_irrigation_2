@@ -36,12 +36,12 @@ struct ChannelConfig {
 ChannelConfig channels[] = {
   {"sovrum",                  631325,  1, "IA9TGDTR2351DC1I", "C",  1},
   {"overvaning",              2011583, 1, "EL96SBAO527BKNP3", "C",  1},
-  {"ute",                     2013865, 1, "PLWLFP0HG4TE9BNZ", "C",  1},
+  {"ute sanda",               2013865, 1, "PLWLFP0HG4TE9BNZ", "C",  1},
   {"kok",                     2014046, 1, "68ODS47UMTXTWR9K", "C",  1},
-  {"outdoor temp",            2019519, 1, "3HZ51EFUGWRX9DBQ", "C",  1}, // Ny (antar fält 1 för temp, ändra field om det är ett annat)
-  {"water depth",             3422161, 1, "0SI22N5VUS0UEBUD", "cm", 0}, // Ny (satt till fält 1, justera vid behov)
-  {"rain",                    3424144, 1, "7QXA4BYHS5MNVMKY", "mm", 1}, // Ny
-  {"light",                   3482060, 1, "A9Z2KGTLFR5KEV1Z", "lx", 0}  // Ny
+  {"ute uppsala",             2019519, 1, "3HZ51EFUGWRX9DBQ", "C",  1}, // Ny (antar fält 1 för temp, ändra field om det är ett annat)
+  {"vattendjup",              3422161, 1, "0SI22N5VUS0UEBUD", "cm", 0}, // Ny (satt till fält 1, justera vid behov)
+  {"regn",                    3424144, 1, "7QXA4BYHS5MNVMKY", "mm", 1}, // Ny
+  {"ljus",                    3482060, 1, "A9Z2KGTLFR5KEV1Z", "lx", 0}  // Ny
 };
 
 constexpr int NUM_CHANNELS = sizeof(channels) / sizeof(channels[0]);
@@ -56,7 +56,7 @@ constexpr int NUM_CHANNELS = sizeof(channels) / sizeof(channels[0]);
 #define TFT_CS   4
 #define PIN_LED  5
 
-const int SCREEN_BRIGHTNESS = 130; 
+const int SCREEN_BRIGHTNESS = 50; 
 
 constexpr int SCREEN_W = 320;
 constexpr int SCREEN_H = 170;
