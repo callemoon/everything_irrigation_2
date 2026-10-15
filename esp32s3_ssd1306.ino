@@ -8,7 +8,7 @@
 #define OLED_SDA 8    // ändra vid behov
 #define OLED_SCL 9    // ändra vid behov
 
-#define ADC_PIN 4     // välj valfri ADC-ingång
+#define ADC_PIN 3     // välj valfri ADC-ingång
 
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 
