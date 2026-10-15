@@ -1,132 +1,137 @@
 #include <Wire.h>
-#include <Adafruit_GFX.h>
-#include <Adafruit_SSD1306.h>
+#include <U8g2lib.h>
+#include <WiFi.h>
+#include <HTTPClient.h>
 
-#define SCREEN_WIDTH 128
-#define SCREEN_HEIGHT 64
+// --- WiFi & ThingSpeak Inställningar ---
+const char* ssid = "";        // Byt till ditt WiFi-namn
+const char* password = ""; // Byt till ditt WiFi-lösenord
 
-// OLED-pinnar (justera vid behov)
-#define OLED_SDA 8
-#define OLED_SCL 9
+const char* server = "http://api.thingspeak.com/update";
+const char* writeAPIKey = "";   // Byt till din ThingSpeak Write API Key
+
+unsigned long lastThingSpeakUpdate = 0;
+const unsigned long thingSpeakInterval = 60000; // 60 sekunder (1 minut) i millisekunder
+
+// Skapa objekt för 1.3" I2C OLED med SH1106-drivrutin (128x64)
+U8G2_SH1106_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
 
 // ADC-ingång
 #define ADC_PIN 3
 
-// SSD1306 I2C-adress
-#define OLED_ADDR 0x3C
-
 // Lastmotstånd
 const float LOAD_RESISTANCE = 2.0f;
-
-// Om du använder spänningsdelare:
-// 1.0 = ingen spänningsdelare
-// 2.0 = 10k + 10k
 const float VOLTAGE_MULTIPLIER = 1.0f;
 
-Adafruit_SSD1306 display(
-    SCREEN_WIDTH,
-    SCREEN_HEIGHT,
-    &Wire,
-    -1);
-
 float consumed_mAh = 0.0f;
-
 unsigned long startTime;
 unsigned long lastUpdate;
 
-void setup()
-{
+void setup() {
     Serial.begin(115200);
 
-    Wire.begin(OLED_SDA, OLED_SCL);
-
-    if (!display.begin(
-            SSD1306_SWITCHCAPVCC,
-            OLED_ADDR))
-    {
-        Serial.println("OLED init failed");
-        while (1);
-    }
+    // Initiera I2C på pinnar 8 och 9
+    Wire.begin(8, 9);
+    
+    // Starta skärmen
+    u8g2.begin();
 
     analogReadResolution(12);
 
-    display.clearDisplay();
-    display.setTextColor(SSD1306_WHITE);
+    // Anslut till WiFi
+    WiFi.begin(ssid, password);
+    Serial.print("Ansluter till WiFi");
+    while (WiFi.status() != WL_CONNECTED) {
+        delay(500);
+        Serial.print(".");
+    }
+    Serial.println("\nWiFi anslutet!");
 
     startTime = millis();
     lastUpdate = millis();
 }
 
-void loop()
-{
+void loop() {
     unsigned long now = millis();
 
     // Läs ADC
     uint16_t raw = analogRead(ADC_PIN);
+    float adcVoltage = ((float)raw * 3.3f) / 4095.0f;
+    float batteryVoltage = adcVoltage * VOLTAGE_MULTIPLIER;
 
-    // ADC -> Volt
-    float adcVoltage =
-        ((float)raw * 3.3f) / 4095.0f;
-
-    float batteryVoltage =
-        adcVoltage * VOLTAGE_MULTIPLIER;
-
-    // Beräkna ström genom lasten
-    float current_mA =
-        (batteryVoltage / LOAD_RESISTANCE) * 1000.0f;
+    // Beräkna ström
+    float current_mA = (batteryVoltage / LOAD_RESISTANCE) * 1000.0f;
 
     // Integrera mAh
-    float elapsedHours =
-        (now - lastUpdate) / 3600000.0f;
-
-    consumed_mAh +=
-        current_mA * elapsedHours;
-
+    float elapsedHours = (now - lastUpdate) / 3600000.0f;
+    consumed_mAh += current_mA * elapsedHours;
     lastUpdate = now;
 
-    unsigned long elapsedSeconds =
-        (now - startTime) / 1000;
+    unsigned long elapsedSeconds = (now - startTime) / 1000;
 
-    // OLED
-    display.clearDisplay();
+    // --- Skicka till ThingSpeak via HTTP en gång i minuten ---
+    if (now - lastThingSpeakUpdate >= thingSpeakInterval) {
+        lastThingSpeakUpdate = now;
 
-    display.setTextSize(2);
-    display.setCursor(0, 0);
-    display.print(batteryVoltage, 2);
-    display.println("V");
+        if (WiFi.status() == WL_CONNECTED) {
+            HTTPClient http;
+            
+            // Bygg URL:en med API-nyckel och fält (field1 = spänning, field2 = ström, field3 = mAh)
+            String url = String(server) + "?api_key=" + writeAPIKey + 
+                         "&field1=" + String(batteryVoltage, 3) + 
+                         "&field2=" + String(current_mA, 0) + 
+                         "&field3=" + String(consumed_mAh, 1);
 
-    display.setTextSize(1);
+            http.begin(url);
+            int httpResponseCode = http.GET();
 
-    display.setCursor(0, 25);
-    display.print("I:");
-    display.print(current_mA, 0);
-    display.println("mA");
+            if (httpResponseCode > 0) {
+                Serial.println("Data skickad till ThingSpeak! Svarskod: " + String(httpResponseCode));
+            } else {
+                Serial.println("Fel vid skickning, HTTP-felkod: " + String(httpResponseCode));
+            }
+            http.end();
+        } else {
+            Serial.println("WiFi frånkopplat, kan inte skicka till ThingSpeak.");
+        }
+    }
 
-    display.setCursor(0, 38);
-    display.print("Used:");
-    display.print(consumed_mAh, 0);
-    display.println("mAh");
+    // Rita på OLED med U8g2
+    u8g2.firstPage();
+    do {
+        u8g2.setFont(u8g2_font_fub20_tr); 
+        u8g2.setCursor(0, 22);
+        u8g2.print(batteryVoltage, 2);
+        u8g2.print("V");
 
-    display.setCursor(0, 51);
-    display.print("Time:");
-    display.print(elapsedSeconds);
-    display.print("s");
+        u8g2.setFont(u8g2_font_ncenB08_tr);
+        
+        u8g2.setCursor(0, 38);
+        u8g2.print("I: ");
+        u8g2.print(current_mA, 0);
+        u8g2.print("mA");
 
-    display.display();
+        u8g2.setCursor(0, 50);
+        u8g2.print("Used: ");
+        u8g2.print(consumed_mAh, 0);
+        u8g2.print("mAh");
+
+        u8g2.setCursor(0, 62);
+        u8g2.print("Time: ");
+        u8g2.print(elapsedSeconds);
+        u8g2.print("s");
+        
+    } while (u8g2.nextPage());
 
     // Seriell utskrift
     Serial.print("V=");
     Serial.print(batteryVoltage, 3);
-
-    Serial.print("  I=");
+    Serial.print(" I=");
     Serial.print(current_mA, 0);
-
-    Serial.print("mA  Used=");
+    Serial.print("mA Used=");
     Serial.print(consumed_mAh, 1);
-
-    Serial.print("mAh  Time=");
+    Serial.print("mAh Time=");
     Serial.print(elapsedSeconds);
-
     Serial.println("s");
 
     delay(500);
