@@ -5,14 +5,34 @@
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
 
-#define OLED_SDA 8    // ändra vid behov
-#define OLED_SCL 9    // ändra vid behov
+// OLED-pinnar (justera vid behov)
+#define OLED_SDA 8
+#define OLED_SCL 9
 
-#define ADC_PIN 3     // välj valfri ADC-ingång
+// ADC-ingång
+#define ADC_PIN 3
 
-Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
+// SSD1306 I2C-adress
+#define OLED_ADDR 0x3C
+
+// Lastmotstånd
+const float LOAD_RESISTANCE = 2.0f;
+
+// Om du använder spänningsdelare:
+// 1.0 = ingen spänningsdelare
+// 2.0 = 10k + 10k
+const float VOLTAGE_MULTIPLIER = 1.0f;
+
+Adafruit_SSD1306 display(
+    SCREEN_WIDTH,
+    SCREEN_HEIGHT,
+    &Wire,
+    -1);
+
+float consumed_mAh = 0.0f;
 
 unsigned long startTime;
+unsigned long lastUpdate;
 
 void setup()
 {
@@ -20,7 +40,9 @@ void setup()
 
     Wire.begin(OLED_SDA, OLED_SCL);
 
-    if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C))
+    if (!display.begin(
+            SSD1306_SWITCHCAPVCC,
+            OLED_ADDR))
     {
         Serial.println("OLED init failed");
         while (1);
@@ -32,39 +54,80 @@ void setup()
     display.setTextColor(SSD1306_WHITE);
 
     startTime = millis();
+    lastUpdate = millis();
 }
 
 void loop()
 {
-    int raw = analogRead(ADC_PIN);
+    unsigned long now = millis();
 
-    // ESP32-S3 ADC referens ~3.3 V
-    float voltage = (raw * 3.3f) / 4095.0f;
+    // Läs ADC
+    uint16_t raw = analogRead(ADC_PIN);
 
-    unsigned long seconds = (millis() - startTime) / 1000;
+    // ADC -> Volt
+    float adcVoltage =
+        ((float)raw * 3.3f) / 4095.0f;
 
+    float batteryVoltage =
+        adcVoltage * VOLTAGE_MULTIPLIER;
+
+    // Beräkna ström genom lasten
+    float current_mA =
+        (batteryVoltage / LOAD_RESISTANCE) * 1000.0f;
+
+    // Integrera mAh
+    float elapsedHours =
+        (now - lastUpdate) / 3600000.0f;
+
+    consumed_mAh +=
+        current_mA * elapsedHours;
+
+    lastUpdate = now;
+
+    unsigned long elapsedSeconds =
+        (now - startTime) / 1000;
+
+    // OLED
     display.clearDisplay();
 
     display.setTextSize(2);
     display.setCursor(0, 0);
-    display.print(voltage, 3);
-    display.println(" V");
+    display.print(batteryVoltage, 2);
+    display.println("V");
 
     display.setTextSize(1);
-    display.setCursor(0, 35);
-    display.print("Time: ");
-    display.print(seconds);
-    display.println(" s");
+
+    display.setCursor(0, 25);
+    display.print("I:");
+    display.print(current_mA, 0);
+    display.println("mA");
+
+    display.setCursor(0, 38);
+    display.print("Used:");
+    display.print(consumed_mAh, 0);
+    display.println("mAh");
+
+    display.setCursor(0, 51);
+    display.print("Time:");
+    display.print(elapsedSeconds);
+    display.print("s");
 
     display.display();
 
-    Serial.print("ADC=");
-    Serial.print(raw);
-    Serial.print("  Voltage=");
-    Serial.print(voltage, 3);
-    Serial.print(" V  Time=");
-    Serial.print(seconds);
-    Serial.println(" s");
+    // Seriell utskrift
+    Serial.print("V=");
+    Serial.print(batteryVoltage, 3);
+
+    Serial.print("  I=");
+    Serial.print(current_mA, 0);
+
+    Serial.print("mA  Used=");
+    Serial.print(consumed_mAh, 1);
+
+    Serial.print("mAh  Time=");
+    Serial.print(elapsedSeconds);
+
+    Serial.println("s");
 
     delay(500);
 }
